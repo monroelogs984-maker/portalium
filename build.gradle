@@ -10,16 +10,14 @@ buildscript {
 
 apply plugin: 'net.minecraftforge.gradle'
 
-version = '1.0.0-1.19.2'
+version = '1.0.0-1.16.5'
 group = 'com.glennfo.portalium'
 archivesBaseName = 'portalium'
 
-java {
-    toolchain.languageVersion = JavaLanguageVersion.of(17)
-}
+sourceCompatibility = targetCompatibility = compileJava.sourceCompatibility = compileJava.targetCompatibility = '1.8'
 
 minecraft {
-    mappings channel: 'official', version: '1.19.2'
+    mappings channel: 'official', version: '1.16.5'
 
     runs {
         server {
@@ -34,7 +32,7 @@ minecraft {
 }
 
 dependencies {
-    minecraft 'net.minecraftforge:forge:1.19.2-43.3.0'
+    minecraft 'net.minecraftforge:forge:1.16.5-36.2.39'
 }
 
 jar {
@@ -57,8 +55,8 @@ task deploy {
     doLast {
         copy {
             from "build/libs/${archivesBaseName}-${version}.jar"
-            into '/home/glenn/Documents/curseforge/minecraft/Instances/1.19.2/mods'
+            into '/home/glenn/Documents/curseforge/minecraft/Instances/1.16.5/mods'
         }
-        println "[DEPLOY] portalium → 1.19.2"
+        println "[DEPLOY] portalium → 1.16.5 instance"
     }
 }

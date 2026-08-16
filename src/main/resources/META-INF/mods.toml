@@ -1,10 +1,10 @@
 modLoader="javafml"
-loaderVersion="[43,)"
+loaderVersion="[36,)"
 license="MIT"
 
 [[mods]]
 modId="portalium"
-version="1.0.0-1.19.2"
+version="1.0.0-1.16.5"
 displayName="Portalium"
 description='''
 Keeps unused dimensions dormant so they stop ticking and eating server resources.
@@ -14,13 +14,13 @@ Wakes them on demand when a player travels to them.
 [[dependencies.portalium]]
     modId="forge"
     mandatory=true
-    versionRange="[43,)"
+    versionRange="[36,)"
     ordering="NONE"
     side="BOTH"
 
 [[dependencies.portalium]]
     modId="minecraft"
     mandatory=true
-    versionRange="[1.19.2,1.20)"
+    versionRange="[1.16.5,1.17)"
     ordering="NONE"
     side="BOTH"
