@@ -1,15 +1,15 @@
 package com.glennfo.portalium;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 public class PortaliumConfig {
 
-    public static final ModConfigSpec SPEC;
-    public static final ModConfigSpec.IntValue UNLOAD_DELAY_SECONDS;
-    public static final ModConfigSpec.IntValue OVERWORLD_DELAY_MULTIPLIER;
+    public static final ForgeConfigSpec SPEC;
+    public static final ForgeConfigSpec.IntValue UNLOAD_DELAY_SECONDS;
+    public static final ForgeConfigSpec.IntValue OVERWORLD_DELAY_MULTIPLIER;
 
     static {
-        ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
+        ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
         builder.comment("Portalium - dimension unload settings").push("general");
 
         UNLOAD_DELAY_SECONDS = builder

@@ -2,9 +2,8 @@ package com.glennfo.portalium;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
@@ -26,7 +25,7 @@ public class LastDimensionStore {
         Path file = server.getWorldPath(LevelResource.ROOT).resolve(FILE_NAME);
         JsonObject root = readRaw(file);
         JsonObject players = root.has("players") ? root.getAsJsonObject("players") : new JsonObject();
-        players.addProperty(playerUuid.toString(), dimension.identifier().toString());
+        players.addProperty(playerUuid.toString(), dimension.location().toString());
         root.add("players", players);
         try (FileWriter w = new FileWriter(file.toFile())) {
             GSON.toJson(root, w);
@@ -41,13 +40,7 @@ public class LastDimensionStore {
         JsonObject players = root.getAsJsonObject("players");
         String uuidKey = playerUuid.toString();
         if (!players.has(uuidKey)) return null;
-        try {
-            Identifier loc = Identifier.tryParse(players.get(uuidKey).getAsString());
-            if (loc == null) return null;
-            return ResourceKey.create(Registries.DIMENSION, loc);
-        } catch (Exception e) {
-            return null;
-        }
+        return parseKey(players.get(uuidKey).getAsString());
     }
 
     public static Set<ResourceKey<Level>> loadAll(MinecraftServer server) {
@@ -56,13 +49,20 @@ public class LastDimensionStore {
         if (!root.has("players")) return result;
         JsonObject players = root.getAsJsonObject("players");
         for (String uuid : players.keySet()) {
-            try {
-                Identifier loc = Identifier.tryParse(players.get(uuid).getAsString());
-                if (loc == null) continue;
-                result.add(ResourceKey.create(Registries.DIMENSION, loc));
-            } catch (Exception ignored) {}
+            ResourceKey<Level> key = parseKey(players.get(uuid).getAsString());
+            if (key != null) result.add(key);
         }
         return result;
+    }
+
+    private static ResourceKey<Level> parseKey(String str) {
+        try {
+            ResourceLocation loc = ResourceLocation.tryParse(str);
+            if (loc == null) return null;
+            return ResourceKey.create(net.minecraft.core.Registry.DIMENSION_REGISTRY, loc);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static JsonObject readRaw(Path file) {
