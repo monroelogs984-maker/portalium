@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
@@ -26,7 +26,7 @@ public class LastDimensionStore {
         Path file = server.getWorldPath(LevelResource.ROOT).resolve(FILE_NAME);
         JsonObject root = readRaw(file);
         JsonObject players = root.has("players") ? root.getAsJsonObject("players") : new JsonObject();
-        players.addProperty(playerUuid.toString(), dimension.location().toString());
+        players.addProperty(playerUuid.toString(), dimension.identifier().toString());
         root.add("players", players);
         try (FileWriter w = new FileWriter(file.toFile())) {
             GSON.toJson(root, w);
@@ -42,7 +42,7 @@ public class LastDimensionStore {
         String uuidKey = playerUuid.toString();
         if (!players.has(uuidKey)) return null;
         try {
-            ResourceLocation loc = ResourceLocation.tryParse(players.get(uuidKey).getAsString());
+            Identifier loc = Identifier.tryParse(players.get(uuidKey).getAsString());
             if (loc == null) return null;
             return ResourceKey.create(Registries.DIMENSION, loc);
         } catch (Exception e) {
@@ -57,7 +57,7 @@ public class LastDimensionStore {
         JsonObject players = root.getAsJsonObject("players");
         for (String uuid : players.keySet()) {
             try {
-                ResourceLocation loc = ResourceLocation.tryParse(players.get(uuid).getAsString());
+                Identifier loc = Identifier.tryParse(players.get(uuid).getAsString());
                 if (loc == null) continue;
                 result.add(ResourceKey.create(Registries.DIMENSION, loc));
             } catch (Exception ignored) {}

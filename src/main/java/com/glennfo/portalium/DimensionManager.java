@@ -71,7 +71,7 @@ public class DimensionManager {
         try {
             fromLevel.save(null, true, false);
         } catch (Exception e) {
-            System.err.println("[Portalium] Save-on-leave failed for " + from.location() + ": " + e.getMessage());
+            System.err.println("[Portalium] Save-on-leave failed for " + from.identifier() + ": " + e.getMessage());
         }
 
         if (fromLevel.players().isEmpty()) {
@@ -87,7 +87,7 @@ public class DimensionManager {
 
         ResourceKey<Level> destination = event.getDimension();
         if (dormantDims.contains(destination)) {
-            System.out.println("[Portalium] Activating dormant dimension " + destination.location() + " for travel");
+            System.out.println("[Portalium] Activating dormant dimension " + destination.identifier() + " for travel");
             activateDim(server, destination);
         }
     }
@@ -99,9 +99,9 @@ public class DimensionManager {
         MinecraftServer server = activeServer;
         if (server == null) return;
 
-        ResourceKey<Level> respawnDim = sp.getRespawnDimension();
+        ResourceKey<Level> respawnDim = ServerPlayer.RespawnConfig.getDimensionOrDefault(sp.getRespawnConfig());
         if (dormantDims.contains(respawnDim)) {
-            System.out.println("[Portalium] Activating dormant respawn dimension " + respawnDim.location());
+            System.out.println("[Portalium] Activating dormant respawn dimension " + respawnDim.identifier());
             activateDim(server, respawnDim);
         }
     }
@@ -115,7 +115,7 @@ public class DimensionManager {
 
         ResourceKey<Level> lastDim = LastDimensionStore.load(server, sp.getUUID());
         if (lastDim != null && dormantDims.contains(lastDim)) {
-            System.out.println("[Portalium] Pre-activating " + lastDim.location() + " for " + sp.getName().getString());
+            System.out.println("[Portalium] Pre-activating " + lastDim.identifier() + " for " + sp.getName().getString());
             activateDim(server, lastDim);
         }
     }
@@ -153,7 +153,7 @@ public class DimensionManager {
         }
 
         if (destination != null && dormantDims.contains(destination)) {
-            System.out.println("[Portalium] Portal contact — activating " + destination.location());
+            System.out.println("[Portalium] Portal contact — activating " + destination.identifier());
             activateDim(server, destination);
         }
     }
@@ -173,7 +173,7 @@ public class DimensionManager {
             ServerLevel level = server.getLevel(entry.getKey());
             if (level == null) return true;
             if (!level.players().isEmpty()) {
-                System.out.println("[Portalium] Cancelled dormant for " + entry.getKey().location() + " — player re-entered");
+                System.out.println("[Portalium] Cancelled dormant for " + entry.getKey().identifier() + " — player re-entered");
                 return true;
             }
             makeDormant(server, level);
@@ -207,7 +207,7 @@ public class DimensionManager {
             if (!dormantDims.contains(l.dimension())) activeCount++;
         }
         if (activeCount <= 1) {
-            System.err.println("[Portalium] Refused to make " + key.location() + " dormant — only active dimension");
+            System.err.println("[Portalium] Refused to make " + key.identifier() + " dormant — only active dimension");
             return;
         }
 
@@ -218,9 +218,9 @@ public class DimensionManager {
             ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(0);
             ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setDayTime(0);
             dormantDims.add(key);
-            System.out.println("[Portalium] Made dormant: " + key.location());
+            System.out.println("[Portalium] Made dormant: " + key.identifier());
         } catch (Exception e) {
-            System.err.println("[Portalium] Failed to make dormant " + key.location() + ": " + e.getMessage());
+            System.err.println("[Portalium] Failed to make dormant " + key.identifier() + ": " + e.getMessage());
         }
     }
 
@@ -257,9 +257,9 @@ public class DimensionManager {
             dormantDims.remove(key);
             pendingUnload.remove(key);
             NeoForge.EVENT_BUS.post(new LevelEvent.Load((LevelAccessor) level));
-            System.out.println("[Portalium] Activated: " + key.location());
+            System.out.println("[Portalium] Activated: " + key.identifier());
         } catch (Exception e) {
-            System.err.println("[Portalium] Failed to activate " + key.location() + ": " + e.getMessage());
+            System.err.println("[Portalium] Failed to activate " + key.identifier() + ": " + e.getMessage());
             dormantDims.remove(key);
         }
     }
