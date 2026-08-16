@@ -4,11 +4,9 @@ import net.minecraft.block.Blocks;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.RegistryKey;
-import net.minecraft.world.World;
+import net.minecraft.world.dimension.DimensionType;
+import net.minecraft.world.storage.WorldInfo;
 import net.minecraft.world.server.ServerWorld;
-import net.minecraft.world.storage.IServerWorldInfo;
-import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityTravelToDimensionEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -25,14 +23,14 @@ import java.util.Set;
 @Mod.EventBusSubscriber(modid = Portalium.MOD_ID)
 public class DimensionManager {
 
-    private static final Map<RegistryKey<World>, Integer> pendingUnload = new HashMap<>();
-    private static final Set<RegistryKey<World>> dormantDims = new HashSet<>();
+    private static final Map<DimensionType, Integer> pendingUnload = new HashMap<>();
+    private static final Set<DimensionType> dormantDims = new HashSet<>();
     private static final int STARTUP_CLEANUP_DELAY = 40;
     private static int startupCountdown = -1;
     private static MinecraftServer activeServer = null;
 
-    public static boolean isDormant(RegistryKey<World> key) {
-        return dormantDims.contains(key);
+    public static boolean isDormant(DimensionType dim) {
+        return dormantDims.contains(dim);
     }
 
     public static void onServerStarted(MinecraftServer server) {
@@ -55,26 +53,26 @@ public class DimensionManager {
         MinecraftServer server = activeServer;
         if (server == null) return;
 
-        RegistryKey<World> from = event.getFrom();
-        RegistryKey<World> to = event.getTo();
+        DimensionType from = event.getFrom();
+        DimensionType to = event.getTo();
 
-        LastDimensionStore.save(server, event.getPlayer().getUUID(), to);
+        LastDimensionStore.save(server, event.getPlayer().getUniqueID(), to);
         pendingUnload.remove(to);
 
         if (dormantDims.contains(to)) {
             activateDim(server, to);
         }
 
-        ServerWorld fromWorld = server.getLevel(from);
+        ServerWorld fromWorld = server.getWorld(from);
         if (fromWorld == null) return;
 
         try {
             fromWorld.save(null, true, false);
         } catch (Exception e) {
-            System.err.println("[Portalium] Save-on-leave failed for " + from.location() + ": " + e.getMessage());
+            System.err.println("[Portalium] Save-on-leave failed for " + from + ": " + e.getMessage());
         }
 
-        if (fromWorld.players().isEmpty()) {
+        if (fromWorld.getPlayers().isEmpty()) {
             scheduleUnload(from);
         }
     }
@@ -85,9 +83,9 @@ public class DimensionManager {
         MinecraftServer server = activeServer;
         if (server == null) return;
 
-        RegistryKey<World> destination = event.getDimension();
+        DimensionType destination = event.getDimension();
         if (dormantDims.contains(destination)) {
-            System.out.println("[Portalium] Activating dormant dimension " + destination.location() + " for travel");
+            System.out.println("[Portalium] Activating dormant dimension " + destination + " for travel");
             activateDim(server, destination);
         }
     }
@@ -99,9 +97,9 @@ public class DimensionManager {
         MinecraftServer server = activeServer;
         if (server == null) return;
 
-        RegistryKey<World> respawnDim = ((ServerPlayerEntity) player).getRespawnDimension();
+        DimensionType respawnDim = player.getSpawnDimension();
         if (respawnDim != null && dormantDims.contains(respawnDim)) {
-            System.out.println("[Portalium] Activating dormant respawn dimension " + respawnDim.location());
+            System.out.println("[Portalium] Activating dormant respawn dimension " + respawnDim);
             activateDim(server, respawnDim);
         }
     }
@@ -113,9 +111,9 @@ public class DimensionManager {
         MinecraftServer server = activeServer;
         if (server == null) return;
 
-        RegistryKey<World> lastDim = LastDimensionStore.load(server, player.getUUID());
+        DimensionType lastDim = LastDimensionStore.load(server, player.getUniqueID());
         if (lastDim != null && dormantDims.contains(lastDim)) {
-            System.out.println("[Portalium] Pre-activating " + lastDim.location() + " for " + player.getName().getString());
+            System.out.println("[Portalium] Pre-activating " + lastDim + " for " + player.getName().getString());
             activateDim(server, lastDim);
         }
     }
@@ -127,11 +125,11 @@ public class DimensionManager {
         MinecraftServer server = activeServer;
         if (server == null) return;
 
-        RegistryKey<World> dim = player.level.dimension();
-        ServerWorld world = server.getLevel(dim);
+        DimensionType dim = player.dimension;
+        ServerWorld world = server.getWorld(dim);
         if (world == null) return;
 
-        if (world.players().size() <= 1) {
+        if (world.getPlayers().size() <= 1) {
             scheduleUnload(dim);
         }
     }
@@ -144,15 +142,15 @@ public class DimensionManager {
         if (server == null) return;
 
         PlayerEntity player = event.player;
-        RegistryKey<World> destination = null;
-        if (player.level.getBlockState(player.blockPosition()).getBlock() == Blocks.NETHER_PORTAL) {
-            destination = World.NETHER;
-        } else if (player.level.getBlockState(player.blockPosition()).getBlock() == Blocks.END_PORTAL) {
-            destination = World.END;
+        DimensionType destination = null;
+        if (player.world.getBlockState(player.getPosition()).getBlock() == Blocks.NETHER_PORTAL) {
+            destination = DimensionType.THE_NETHER;
+        } else if (player.world.getBlockState(player.getPosition()).getBlock() == Blocks.END_PORTAL) {
+            destination = DimensionType.THE_END;
         }
 
         if (destination != null && dormantDims.contains(destination)) {
-            System.out.println("[Portalium] Portal contact — activating " + destination.location());
+            System.out.println("[Portalium] Portal contact — activating " + destination);
             activateDim(server, destination);
         }
     }
@@ -169,10 +167,10 @@ public class DimensionManager {
         pendingUnload.replaceAll((key, ticks) -> ticks - 1);
         pendingUnload.entrySet().removeIf(entry -> {
             if (entry.getValue() > 0) return false;
-            ServerWorld world = server.getLevel(entry.getKey());
+            ServerWorld world = server.getWorld(entry.getKey());
             if (world == null) return true;
-            if (!world.players().isEmpty()) {
-                System.out.println("[Portalium] Cancelled dormant for " + entry.getKey().location() + " — player re-entered");
+            if (!world.getPlayers().isEmpty()) {
+                System.out.println("[Portalium] Cancelled dormant for " + entry.getKey() + " — player re-entered");
                 return true;
             }
             makeDormant(server, world);
@@ -181,45 +179,45 @@ public class DimensionManager {
     }
 
     private static void doStartupCleanup(MinecraftServer server) {
-        Set<RegistryKey<World>> keepActive = LastDimensionStore.loadAll(server);
-        keepActive.add(World.OVERWORLD);
-        for (ServerWorld world : server.getAllLevels()) {
-            RegistryKey<World> key = world.dimension();
-            if (keepActive.contains(key) || !world.players().isEmpty()) continue;
+        Set<DimensionType> keepActive = LastDimensionStore.loadAll(server);
+        keepActive.add(DimensionType.OVERWORLD);
+        for (ServerWorld world : server.getWorlds()) {
+            DimensionType key = world.getDimension().getType();
+            if (keepActive.contains(key) || !world.getPlayers().isEmpty()) continue;
             scheduleUnload(key);
         }
     }
 
-    private static void scheduleUnload(RegistryKey<World> key) {
+    private static void scheduleUnload(DimensionType key) {
         int delayTicks = PortaliumConfig.UNLOAD_DELAY_SECONDS.get() * 20;
-        if (key.equals(World.OVERWORLD)) {
+        if (key == DimensionType.OVERWORLD) {
             delayTicks *= PortaliumConfig.OVERWORLD_DELAY_MULTIPLIER.get();
         }
         pendingUnload.put(key, delayTicks);
     }
 
     private static void makeDormant(MinecraftServer server, ServerWorld world) {
-        RegistryKey<World> key = world.dimension();
+        DimensionType key = world.getDimension().getType();
 
         long activeCount = 0;
-        for (ServerWorld w : server.getAllLevels()) {
-            if (!dormantDims.contains(w.dimension())) activeCount++;
+        for (ServerWorld w : server.getWorlds()) {
+            if (!dormantDims.contains(w.getDimension().getType())) activeCount++;
         }
         if (activeCount <= 1) {
-            System.err.println("[Portalium] Refused to make " + key.location() + " dormant — only active dimension");
+            System.err.println("[Portalium] Refused to make " + key + " dormant — only active dimension");
             return;
         }
 
         try {
-            MinecraftForge.EVENT_BUS.post(new WorldEvent.Unload(world));
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new WorldEvent.Unload(world));
             world.save(null, true, false);
-            IServerWorldInfo info = (IServerWorldInfo) world.getLevelData();
+            WorldInfo info = (WorldInfo) world.getWorldInfo();
             info.setGameTime(0);
             info.setDayTime(0);
             dormantDims.add(key);
-            System.out.println("[Portalium] Made dormant: " + key.location());
+            System.out.println("[Portalium] Made dormant: " + key);
         } catch (Exception e) {
-            System.err.println("[Portalium] Failed to make dormant " + key.location() + ": " + e.getMessage());
+            System.err.println("[Portalium] Failed to make dormant " + key + ": " + e.getMessage());
         }
     }
 
@@ -237,7 +235,7 @@ public class DimensionManager {
                     Object firstValue = map.values().iterator().next();
                     if (!(firstValue instanceof ServerWorld)) continue;
                     @SuppressWarnings("unchecked")
-                    Map<RegistryKey<World>, ServerWorld> worlds = (Map<RegistryKey<World>, ServerWorld>) val;
+                    Map<DimensionType, ServerWorld> worlds = (Map<DimensionType, ServerWorld>) val;
                     f.set(server, new DormantAwareLevelMap(worlds, dormantDims));
                     System.out.println("[Portalium] Injected DormantAwareLevelMap — dormant dims will not be ticked");
                     return;
@@ -247,20 +245,20 @@ public class DimensionManager {
         System.err.println("[Portalium] Could not inject DormantAwareLevelMap — dormant dims will still be ticked (less effective but safe)");
     }
 
-    private static void activateDim(MinecraftServer server, RegistryKey<World> key) {
-        ServerWorld world = server.getLevel(key);
+    private static void activateDim(MinecraftServer server, DimensionType key) {
+        ServerWorld world = server.getWorld(key);
         if (world == null) return;
         try {
-            ServerWorld overworld = server.overworld();
-            IServerWorldInfo info = (IServerWorldInfo) world.getLevelData();
+            ServerWorld overworld = server.getWorld(DimensionType.OVERWORLD);
+            WorldInfo info = (WorldInfo) world.getWorldInfo();
             info.setGameTime(overworld.getGameTime());
             info.setDayTime(overworld.getDayTime());
             dormantDims.remove(key);
             pendingUnload.remove(key);
-            MinecraftForge.EVENT_BUS.post(new WorldEvent.Load(world));
-            System.out.println("[Portalium] Activated: " + key.location());
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new WorldEvent.Load(world));
+            System.out.println("[Portalium] Activated: " + key);
         } catch (Exception e) {
-            System.err.println("[Portalium] Failed to activate " + key.location() + ": " + e.getMessage());
+            System.err.println("[Portalium] Failed to activate " + key + ": " + e.getMessage());
             dormantDims.remove(key);
         }
     }

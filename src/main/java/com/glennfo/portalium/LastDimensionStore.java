@@ -3,10 +3,8 @@ package com.glennfo.portalium;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.RegistryKey;
+import net.minecraft.world.dimension.DimensionType;
 import net.minecraft.util.ResourceLocation;
-import net.minecraft.world.World;
-import net.minecraft.world.storage.FolderName;
 
 import java.io.File;
 import java.io.FileReader;
@@ -22,11 +20,14 @@ public class LastDimensionStore {
     private static final Gson GSON = new Gson();
     private static final String FILE_NAME = "portalium_last_dim.json";
 
-    public static void save(MinecraftServer server, UUID playerUuid, RegistryKey<World> dimension) {
+    public static void save(MinecraftServer server, UUID playerUuid, DimensionType dimension) {
         File file = getSaveFile(server);
+        if (file == null) return;
+        String dimKey = dimToString(dimension);
+        if (dimKey == null) return;
         JsonObject root = readRaw(file);
         JsonObject players = root.has("players") ? root.getAsJsonObject("players") : new JsonObject();
-        players.addProperty(playerUuid.toString(), dimension.location().toString());
+        players.addProperty(playerUuid.toString(), dimKey);
         root.add("players", players);
         try (FileWriter w = new FileWriter(file)) {
             GSON.toJson(root, w);
@@ -35,40 +36,54 @@ public class LastDimensionStore {
         }
     }
 
-    public static RegistryKey<World> load(MinecraftServer server, UUID playerUuid) {
-        JsonObject root = readRaw(getSaveFile(server));
+    public static DimensionType load(MinecraftServer server, UUID playerUuid) {
+        File file = getSaveFile(server);
+        if (file == null) return null;
+        JsonObject root = readRaw(file);
         if (!root.has("players")) return null;
         JsonObject players = root.getAsJsonObject("players");
         String uuidKey = playerUuid.toString();
         if (!players.has(uuidKey)) return null;
-        return parseKey(players.get(uuidKey).getAsString());
+        return stringToDim(players.get(uuidKey).getAsString());
     }
 
-    public static Set<RegistryKey<World>> loadAll(MinecraftServer server) {
-        Set<RegistryKey<World>> result = new HashSet<>();
-        JsonObject root = readRaw(getSaveFile(server));
+    public static Set<DimensionType> loadAll(MinecraftServer server) {
+        Set<DimensionType> result = new HashSet<>();
+        File file = getSaveFile(server);
+        if (file == null) return result;
+        JsonObject root = readRaw(file);
         if (!root.has("players")) return result;
         JsonObject players = root.getAsJsonObject("players");
         for (Map.Entry<String, com.google.gson.JsonElement> entry : players.entrySet()) {
-            RegistryKey<World> key = parseKey(entry.getValue().getAsString());
-            if (key != null) result.add(key);
+            DimensionType dim = stringToDim(entry.getValue().getAsString());
+            if (dim != null) result.add(dim);
         }
         return result;
     }
 
     private static File getSaveFile(MinecraftServer server) {
-        return server.getWorldPath(FolderName.ROOT).resolve(FILE_NAME).toFile();
+        try {
+            File worldDir = server.getWorld(DimensionType.OVERWORLD).getSaveHandler().getWorldDirectory();
+            return new File(worldDir, FILE_NAME);
+        } catch (Exception e) {
+            System.err.println("[Portalium] Could not resolve world directory: " + e.getMessage());
+            return null;
+        }
     }
 
-    // RegistryKey<Registry<World>> derived from an existing World key — avoids hardcoding the registry name
-    private static final RegistryKey<net.minecraft.util.registry.Registry<World>> WORLD_REGISTRY =
-        RegistryKey.createRegistryKey(World.OVERWORLD.getRegistryName());
-
-    private static RegistryKey<World> parseKey(String str) {
+    private static String dimToString(DimensionType dim) {
         try {
-            ResourceLocation loc = ResourceLocation.tryParse(str);
-            if (loc == null) return null;
-            return RegistryKey.create(WORLD_REGISTRY, loc);
+            ResourceLocation key = DimensionType.getKey(dim);
+            return key != null ? key.toString() : null;
+        } catch (Exception e) {
+            System.err.println("[Portalium] Could not serialize DimensionType: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private static DimensionType stringToDim(String str) {
+        try {
+            return DimensionType.byName(new ResourceLocation(str));
         } catch (Exception e) {
             return null;
         }

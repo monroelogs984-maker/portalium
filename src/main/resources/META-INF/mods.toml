@@ -1,26 +1,26 @@
 modLoader="javafml"
-loaderVersion="[36,)"
+loaderVersion="[31,)"
 license="MIT"
 
 [[mods]]
 modId="portalium"
-version="1.0.0-1.16.5"
-displayName="Portalium"
+version="1.0.0"
+displayName="Portalium Legacy"
 description='''
-Keeps unused dimensions dormant so they stop ticking and eating server resources.
-Wakes them on demand when a player travels to them.
+Unloads dimensions when no players are present, reducing save lag and memory usage.
+Only the dimension you are in stays active.
 '''
 
 [[dependencies.portalium]]
     modId="forge"
     mandatory=true
-    versionRange="[36,)"
+    versionRange="[31,)"
     ordering="NONE"
     side="BOTH"
 
 [[dependencies.portalium]]
     modId="minecraft"
     mandatory=true
-    versionRange="[1.16.5,1.17)"
+    versionRange="[1.15.2,1.16)"
     ordering="NONE"
     side="BOTH"
