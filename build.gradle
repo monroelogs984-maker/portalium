@@ -1,0 +1,27 @@
+plugins {
+    id 'net.neoforged.gradle.userdev' version '7.0.171'
+}
+
+version = '2.0.0'
+group = 'com.glennfo.portalium'
+
+base {
+    archivesName = 'portalium'
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+}
+
+runs {
+    configureEach {
+        systemProperty 'neoforge.logging.markers', 'REGISTRIES'
+        systemProperty 'neoforge.logging.console.level', 'debug'
+        modSource project.sourceSets.main
+    }
+    server {}
+}
+
+dependencies {
+    implementation "net.neoforged:neoforge:21.1.233"
+}
