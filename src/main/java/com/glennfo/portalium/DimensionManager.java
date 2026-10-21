@@ -6,14 +6,11 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.EntityTravelToDimensionEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
 import java.lang.reflect.Field;
@@ -43,6 +40,18 @@ public class DimensionManager {
         injectLevelMap(server);
     }
 
+    /**
+     * Wake every dormant dimension before vanilla shuts down, so the shutdown save and
+     * level close (which iterate getAllLevels()) include them again.
+     */
+    public static void onServerStopping() {
+        if (!dormantDims.isEmpty()) {
+            System.out.println("[Portalium] Waking " + dormantDims.size() + " dormant dimension(s) for shutdown save");
+        }
+        dormantDims.clear();
+        pendingUnload.clear();
+    }
+
     public static void onServerStopped() {
         pendingUnload.clear();
         dormantDims.clear();
@@ -65,14 +74,10 @@ public class DimensionManager {
             activateDim(server, to);
         }
 
+        // No save here: a flushed save on every dimension change caused 500 ms+ ticks.
+        // The level is saved once, without blocking, when it actually goes dormant.
         ServerLevel fromLevel = server.getLevel(from);
         if (fromLevel == null) return;
-
-        try {
-            fromLevel.save(null, true, false);
-        } catch (Exception e) {
-            System.err.println("[Portalium] Save-on-leave failed for " + from.location() + ": " + e.getMessage());
-        }
 
         if (fromLevel.players().isEmpty()) {
             scheduleUnload(from);
@@ -192,31 +197,25 @@ public class DimensionManager {
     }
 
     private static void scheduleUnload(ResourceKey<Level> key) {
-        int delayTicks = PortaliumConfig.UNLOAD_DELAY_SECONDS.get() * 20;
-        if (key.equals(Level.OVERWORLD)) {
-            delayTicks *= PortaliumConfig.OVERWORLD_DELAY_MULTIPLIER.get();
-        }
-        pendingUnload.put(key, delayTicks);
+        // The overworld never goes dormant: it drives world time and weather and holds the
+        // world's shared data (maps, raids, most mods' saved data).
+        if (key.equals(Level.OVERWORLD)) return;
+        pendingUnload.put(key, PortaliumConfig.UNLOAD_DELAY_SECONDS.get() * 20);
     }
 
     private static void makeDormant(MinecraftServer server, ServerLevel level) {
         ResourceKey<Level> key = level.dimension();
+        if (key.equals(Level.OVERWORLD)) return;
 
-        long activeCount = 0;
-        for (ServerLevel l : server.getAllLevels()) {
-            if (!dormantDims.contains(l.dimension())) activeCount++;
-        }
-        if (activeCount <= 1) {
-            System.err.println("[Portalium] Refused to make " + key.location() + " dormant — only active dimension");
+        if (!level.getForcedChunks().isEmpty()) {
+            System.out.println("[Portalium] Keeping " + key.location() + " active — it has force-loaded chunks");
             return;
         }
 
         try {
-            NeoForge.EVENT_BUS.post(new LevelEvent.Unload((LevelAccessor) level));
-            level.save(null, true, false);
-            // Freeze time so the dormant level doesn't drift
-            ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(0);
-            ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setDayTime(0);
+            // Non-flushing save: chunk writes go to the IO worker instead of blocking the tick.
+            // The level stays loaded, so no LevelEvent.Unload is posted and its time is untouched.
+            level.save(null, false, false);
             dormantDims.add(key);
             System.out.println("[Portalium] Made dormant: " + key.location());
         } catch (Exception e) {
@@ -248,19 +247,9 @@ public class DimensionManager {
     }
 
     private static void activateDim(MinecraftServer server, ResourceKey<Level> key) {
-        ServerLevel level = server.getLevel(key);
-        if (level == null) return;
-        try {
-            ServerLevel overworld = server.overworld();
-            ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(overworld.getGameTime());
-            ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setDayTime(overworld.getDayTime());
-            dormantDims.remove(key);
-            pendingUnload.remove(key);
-            NeoForge.EVENT_BUS.post(new LevelEvent.Load((LevelAccessor) level));
-            System.out.println("[Portalium] Activated: " + key.location());
-        } catch (Exception e) {
-            System.err.println("[Portalium] Failed to activate " + key.location() + ": " + e.getMessage());
-            dormantDims.remove(key);
-        }
+        if (server.getLevel(key) == null) return;
+        dormantDims.remove(key);
+        pendingUnload.remove(key);
+        System.out.println("[Portalium] Activated: " + key.location());
     }
 }

@@ -18,7 +18,7 @@ license="MIT"
 
 [[mods]]
 modId="portalium"
-version="2.0.0"
+version="2.1.0"
 displayName="Portalium"
 description='''
 Unloads dimensions when no players are present, reducing save lag and memory usage.
