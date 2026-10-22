@@ -4,14 +4,8 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.entity.EntityTravelToDimensionEvent;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -19,7 +13,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-@EventBusSubscriber(modid = Portalium.MOD_ID)
 public class DimensionManager {
 
     private static final Map<ResourceKey<Level>, Integer> pendingUnload = new HashMap<>();
@@ -59,15 +52,11 @@ public class DimensionManager {
         startupCountdown = -1;
     }
 
-    @SubscribeEvent
-    public static void onPlayerChangeDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+    public static void onPlayerChangeDimension(ServerPlayer player, ResourceKey<Level> from, ResourceKey<Level> to) {
         MinecraftServer server = activeServer;
         if (server == null) return;
 
-        ResourceKey<Level> from = event.getFrom();
-        ResourceKey<Level> to = event.getTo();
-
-        LastDimensionStore.save(server, event.getEntity().getUUID(), to);
+        LastDimensionStore.save(server, player.getUUID(), to);
         pendingUnload.remove(to);
 
         if (dormantDims.contains(to)) {
@@ -84,23 +73,7 @@ public class DimensionManager {
         }
     }
 
-    @SubscribeEvent
-    public static void onEntityTravelToDimension(EntityTravelToDimensionEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer)) return;
-        MinecraftServer server = activeServer;
-        if (server == null) return;
-
-        ResourceKey<Level> destination = event.getDimension();
-        if (dormantDims.contains(destination)) {
-            System.out.println("[Portalium] Activating dormant dimension " + destination.location() + " for travel");
-            activateDim(server, destination);
-        }
-    }
-
-    @SubscribeEvent
-    public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
-        Player player = event.getEntity();
-        if (!(player instanceof ServerPlayer sp)) return;
+    public static void onPlayerRespawn(ServerPlayer sp) {
         MinecraftServer server = activeServer;
         if (server == null) return;
 
@@ -111,10 +84,7 @@ public class DimensionManager {
         }
     }
 
-    @SubscribeEvent
-    public static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
-        Player player = event.getEntity();
-        if (!(player instanceof ServerPlayer sp)) return;
+    public static void onPlayerLoggedIn(ServerPlayer sp) {
         MinecraftServer server = activeServer;
         if (server == null) return;
 
@@ -125,10 +95,7 @@ public class DimensionManager {
         }
     }
 
-    @SubscribeEvent
-    public static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
-        Player player = event.getEntity();
-        if (!(player instanceof ServerPlayer sp)) return;
+    public static void onPlayerLoggedOut(ServerPlayer sp) {
         MinecraftServer server = activeServer;
         if (server == null) return;
 
@@ -142,13 +109,8 @@ public class DimensionManager {
         }
     }
 
-    @SubscribeEvent
-    public static void onPlayerTick(PlayerTickEvent.Pre event) {
-        Player player = event.getEntity();
-        if (!(player instanceof ServerPlayer sp)) return;
-        MinecraftServer server = activeServer;
-        if (server == null) return;
-
+    // Wakes the destination as soon as a player touches a portal, before the teleport happens.
+    private static void checkPortalContact(MinecraftServer server, ServerPlayer sp) {
         var state = sp.level().getBlockState(sp.blockPosition());
         ResourceKey<Level> destination = null;
         if (state.is(Blocks.NETHER_PORTAL)) {
@@ -164,6 +126,12 @@ public class DimensionManager {
     }
 
     public static void tick(MinecraftServer server) {
+        if (server != activeServer) return;
+        if (!dormantDims.isEmpty()) {
+            for (ServerPlayer sp : server.getPlayerList().getPlayers()) {
+                checkPortalContact(server, sp);
+            }
+        }
         if (startupCountdown > 0) {
             if (--startupCountdown == 0) {
                 doStartupCleanup(server);
@@ -200,7 +168,7 @@ public class DimensionManager {
         // The overworld never goes dormant: it drives world time and weather and holds the
         // world's shared data (maps, raids, most mods' saved data).
         if (key.equals(Level.OVERWORLD)) return;
-        pendingUnload.put(key, PortaliumConfig.UNLOAD_DELAY_SECONDS.get() * 20);
+        pendingUnload.put(key, PortaliumConfig.unloadDelaySeconds() * 20);
     }
 
     private static void makeDormant(MinecraftServer server, ServerLevel level) {

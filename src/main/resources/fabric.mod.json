@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "portalium",
+  "version": "${version}",
+  "name": "Portalium",
+  "description": "Puts dimensions nobody is in to sleep (no ticking) and wakes them the moment a player heads there. The overworld always stays awake.",
+  "authors": ["BROMAX012"],
+  "contact": {
+    "sources": "https://github.com/monroelogs984-maker/portalium",
+    "issues": "https://github.com/monroelogs984-maker/portalium/issues"
+  },
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.glennfo.portalium.Portalium"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "fabric-api": "*",
+    "minecraft": "~1.21.1",
+    "java": ">=21"
+  }
+}
